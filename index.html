@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Screen Fix — Pixel Healer</title>
+  <meta name="description" content="Schermo a colori e pattern per tentare di sbloccare pixel bloccati (stuck pixels)." />
+  <style>
+    :root{
+      --ui-bg: rgba(0,0,0,.55);
+      --ui-border: rgba(255,255,255,.12);
+      --ui-text: #f3f4f6;
+      --ui-muted: #cbd5e1;
+      --btn-bg: rgba(255,255,255,.08);
+      --btn-bg2: rgba(255,255,255,.14);
+    }
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; margin:0; background:#000; overflow:hidden; }
+    canvas{ display:block; width:100vw; height:100vh; }
+
+    /* UI */
+    .ui{
+      position:fixed; left:14px; top:14px;
+      width:min(420px, calc(100vw - 28px));
+      background: var(--ui-bg);
+      border: 1px solid var(--ui-border);
+      border-radius: 16px;
+      padding: 12px 12px 10px;
+      color: var(--ui-text);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      backdrop-filter: blur(10px);
+      user-select:none;
+    }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .title{
+      display:flex; justify-content:space-between; align-items:center; gap:10px;
+      margin-bottom:8px;
+    }
+    .title b{ font-size:14px; letter-spacing:.2px; }
+    .hint{ color: var(--ui-muted); font-size:12px; margin:6px 0 10px; line-height:1.35; }
+    .pill{
+      font-size:12px; color:var(--ui-muted);
+      padding:5px 10px; border-radius:999px;
+      border:1px solid var(--ui-border);
+      background: rgba(255,255,255,.05);
+    }
+    .btn{
+      appearance:none; border:1px solid var(--ui-border);
+      background: var(--btn-bg);
+      color: var(--ui-text);
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 650;
+      font-size: 13px;
+      cursor:pointer;
+      transition: transform .05s ease, background .15s ease;
+    }
+    .btn:hover{ background: var(--btn-bg2); }
+    .btn:active{ transform: translateY(1px); }
+    .btn.primary{ border-color: rgba(34,197,94,.35); }
+    .btn.danger{ border-color: rgba(239,68,68,.35); }
+    .btn.small{ padding:8px 10px; font-size:12px; border-radius:10px; }
+    .sep{ height:1px; background: var(--ui-border); margin:10px 0; }
+
+    label{ font-size:12px; color: var(--ui-muted); display:block; margin:8px 0 4px; }
+    input[type="range"]{ width:100%; }
+    select, input[type="number"]{
+      width:100%;
+      background: rgba(255,255,255,.06);
+      border: 1px solid var(--ui-border);
+      color: var(--ui-text);
+      border-radius: 12px;
+      padding: 10px 10px;
+      font-size: 13px;
+      outline:none;
+    }
+    .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap:10px; }
+    .kbd{
+      font-size:12px; color:var(--ui-muted);
+      margin-top:8px;
+    }
+    .kbd code{
+      background: rgba(255,255,255,.08);
+      border: 1px solid var(--ui-border);
+      padding: 1px 6px;
+      border-radius: 8px;
+      color: var(--ui-text);
+    }
+
+    /* Hide UI */
+    .hidden{ display:none; }
+
+    /* Mobile: keep UI readable */
+    @media (max-width:420px){
+      .ui{ left:10px; top:10px; padding:10px; }
+      .grid2{ grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+
+  <div class="ui" id="ui">
+    <div class="title">
+      <div>
+        <b>Screen Fix — Pixel Healer</b><br>
+        <span class="pill" id="status">Modalità: Flash</span>
+      </div>
+      <button class="btn small" id="toggleUI" title="Nascondi/Mostra UI (H)">H</button>
+    </div>
+
+    <div class="hint">
+      Questo tool mostra colori e pattern rapidi per provare a “sbloccare” pixel bloccati.
+      (Non è garantito; per pixel “morti” spesso non funziona.)
+    </div>
+
+    <div class="grid2">
+      <div>
+        <label>Modalità</label>
+        <select id="mode">
+          <option value="flash">Flash colori (random)</option>
+          <option value="sweep">Sweep (barra che scorre)</option>
+          <option value="checker">Scacchiera (invertita)</option>
+        </select>
+      </div>
+      <div>
+        <label>Palette</label>
+        <select id="palette">
+          <option value="rgbw">RGB + Bianco/Nero</option>
+          <option value="strong">Forti (RGBW + CMY)</option>
+          <option value="full">Full random</option>
+        </select>
+      </div>
+    </div>
+
+    <label>Velocità (ms per frame): <span id="speedLabel">16</span></label>
+    <input id="speed" type="range" min="8" max="200" step="1" value="16" />
+
+    <div class="grid2">
+      <div>
+        <label>Dimensione pattern (px)</label>
+        <input id="cell" type="number" min="2" max="200" value="24" />
+      </div>
+      <div>
+        <label>Larghezza sweep (px)</label>
+        <input id="sweepW" type="number" min="2" max="600" value="80" />
+      </div>
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="row">
+      <button class="btn primary" id="fullscreen">Full Screen</button>
+      <button class="btn" id="pause">Pausa</button>
+      <button class="btn danger" id="reset">Reset</button>
+    </div>
+
+    <div class="kbd">
+      Scorciatoie: <code>F</code> fullscreen • <code>Space</code> pausa • <code>H</code> UI
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d', { alpha: false });
+
+    const ui = document.getElementById('ui');
+    const statusEl = document.getElementById('status');
+
+    const modeEl = document.getElementById('mode');
+    const paletteEl = document.getElementById('palette');
+    const speedEl = document.getElementById('speed');
+    const speedLabel = document.getElementById('speedLabel');
+    const cellEl = document.getElementById('cell');
+    const sweepWEl = document.getElementById('sweepW');
+
+    const btnFS = document.getElementById('fullscreen');
+    const btnPause = document.getElementById('pause');
+    const btnReset = document.getElementById('reset');
+    const btnToggleUI = document.getElementById('toggleUI');
+
+    let W=0,H=0, dpr=1;
+
+    function resize(){
+      dpr = Math.max(1, Math.floor(window.devicePixelRatio || 1));
+      W = Math.floor(window.innerWidth * dpr);
+      H = Math.floor(window.innerHeight * dpr);
+      canvas.width = W;
+      canvas.height = H;
+      // Keep CSS size
+      canvas.style.width = window.innerWidth + 'px';
+      canvas.style.height = window.innerHeight + 'px';
+    }
+    window.addEventListener('resize', resize, { passive:true });
+    resize();
+
+    // Palettes
+    function basePalette(kind){
+      if(kind === 'rgbw'){
+        return [
+          [255,0,0],[0,255,0],[0,0,255],
+          [255,255,255],[0,0,0]
+        ];
+      }
+      if(kind === 'strong'){
+        return [
+          [255,0,0],[0,255,0],[0,0,255],
+          [255,255,255],[0,0,0],
+          [0,255,255],[255,0,255],[255,255,0]
+        ];
+      }
+      return null; // full random
+    }
+
+    function randByte(){ return (Math.random()*256)|0; }
+    function colorToStr(c){ return `rgb(${c[0]},${c[1]},${c[2]})`; }
+
+    let running = true;
+    let timer = null;
+    let t = 0;
+    let sweepX = 0;
+    let invert = false;
+
+    function fillSolid(c){
+      ctx.fillStyle = colorToStr(c);
+      ctx.fillRect(0,0,W,H);
+    }
+
+    function drawChecker(cell, c1, c2){
+      const size = Math.max(2, cell) * dpr;
+      for(let y=0;y<H;y+=size){
+        for(let x=0;x<W;x+=size){
+          const use = (((x/size)|0) + ((y/size)|0) + (invert?1:0)) % 2 === 0 ? c1 : c2;
+          ctx.fillStyle = colorToStr(use);
+          ctx.fillRect(x,y,size,size);
+        }
+      }
+      invert = !invert;
+    }
+
+    function drawSweep(barW, cBg, cBar){
+      // background
+      ctx.fillStyle = colorToStr(cBg);
+      ctx.fillRect(0,0,W,H);
+
+      const bw = Math.max(2, barW) * dpr;
+      // bar
+      ctx.fillStyle = colorToStr(cBar);
+      ctx.fillRect(sweepX, 0, bw, H);
+
+      // move
+      sweepX += Math.max(4, Math.floor(W/120));
+      if(sweepX > W) sweepX = -bw;
+    }
+
+    function pickColor(){
+      const palKind = paletteEl.value;
+      const pal = basePalette(palKind);
+      if(pal){
+        return pal[(Math.random()*pal.length)|0];
+      }
+      // full random
+      return [randByte(), randByte(), randByte()];
+    }
+
+    function frame(){
+      const mode = modeEl.value;
+      const cell = parseInt(cellEl.value || "24", 10);
+      const barW = parseInt(sweepWEl.value || "80", 10);
+
+      const c1 = pickColor();
+      const c2 = pickColor();
+
+      if(mode === 'flash'){
+        fillSolid(c1);
+      } else if(mode === 'checker'){
+        drawChecker(cell, c1, c2);
+      } else if(mode === 'sweep'){
+        drawSweep(barW, c1, c2);
+      }
+
+      t++;
+      statusEl.textContent = `Modalità: ${mode === 'flash' ? 'Flash' : mode === 'checker' ? 'Scacchiera' : 'Sweep'} • frame ${t}`;
+    }
+
+    function startLoop(){
+      stopLoop();
+      const ms = parseInt(speedEl.value, 10);
+      speedLabel.textContent = ms;
+      timer = setInterval(() => { if(running) frame(); }, ms);
+    }
+
+    function stopLoop(){
+      if(timer){ clearInterval(timer); timer = null; }
+    }
+
+    // UI events
+    speedEl.addEventListener('input', startLoop);
+    modeEl.addEventListener('change', () => { t=0; sweepX=0; invert=false; startLoop(); });
+    paletteEl.addEventListener('change', () => { t=0; startLoop(); });
+
+    btnPause.addEventListener('click', () => {
+      running = !running;
+      btnPause.textContent = running ? 'Pausa' : 'Riprendi';
+    });
+
+    btnReset.addEventListener('click', () => {
+      t=0; sweepX=0; invert=false;
+      running = true;
+      btnPause.textContent = 'Pausa';
+      frame();
+    });
+
+    btnToggleUI.addEventListener('click', () => {
+      ui.classList.toggle('hidden');
+    });
+
+    async function goFullscreen(){
+      try{
+        if(!document.fullscreenElement){
+          await document.documentElement.requestFullscreen();
+        }else{
+          await document.exitFullscreen();
+        }
+      }catch(e){
+        // ignore
+      }
+    }
+    btnFS.addEventListener('click', goFullscreen);
+
+    // Keyboard shortcuts
+    window.addEventListener('keydown', (e) => {
+      if(e.code === 'Space'){
+        e.preventDefault();
+        btnPause.click();
+      } else if(e.key.toLowerCase() === 'f'){
+        goFullscreen();
+      } else if(e.key.toLowerCase() === 'h'){
+        ui.classList.toggle('hidden');
+      }
+    });
+
+    // First paint + loop
+    frame();
+    startLoop();
+  </script>
+</body>
+</html>
